@@ -37,8 +37,4 @@ cmake --build build
 
 ## Team
 
-Add the names, groups and actual contributions before submission.
-
-## AI Use
-
-OpenAI Codex helped implement the vault scene, gameplay, lighting, procedural floor and documentation for the second milestone. Record any subsequent team edits in the final AI Use note.
+Sadykov Danial, Tuyegali Meiirzhan
