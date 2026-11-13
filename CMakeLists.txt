@@ -14,8 +14,8 @@ set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.3.9)
-FetchContent_Declare(glm  GIT_REPOSITORY https://github.com/g-truc/glm.git  GIT_TAG 1.0.1)
+FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw.git GIT_TAG 3.3.9 GIT_SUBMODULES "")
+FetchContent_Declare(glm  GIT_REPOSITORY https://github.com/g-truc/glm.git  GIT_TAG 1.0.1 GIT_SUBMODULES "")
 FetchContent_MakeAvailable(glfw glm)
 
 add_executable(${PROJECT_NAME}
@@ -23,6 +23,7 @@ add_executable(${PROJECT_NAME}
     src/Shader.cpp
     src/Mesh.cpp
     src/Camera.cpp
+    src/Vault.cpp
     external/glad/src/glad.c
 )
 

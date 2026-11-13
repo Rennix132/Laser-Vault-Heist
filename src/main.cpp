@@ -2,15 +2,20 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <string>
 
 #include "Shader.h"
 #include "Mesh.h"
 #include "Camera.h"
+#include "Vault.h"
 
 static const int WIDTH = 1280, HEIGHT = 720;
 static Camera camera;
+static Vault vault;
+static bool flashlight = false;
 static float lastX = WIDTH / 2.0f, lastY = HEIGHT / 2.0f;
 static bool firstMouse = true;
 
@@ -22,12 +27,27 @@ static void mouseCallback(GLFWwindow*, double x, double y) {
 
 static void resizeCallback(GLFWwindow*, int w, int h) { glViewport(0, 0, w, h); }
 
-static void processInput(GLFWwindow* win, float dt) {
-    if (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(win, true);
-    if (glfwGetKey(win, GLFW_KEY_W) == GLFW_PRESS) camera.move(CamMove::Forward, dt);
-    if (glfwGetKey(win, GLFW_KEY_S) == GLFW_PRESS) camera.move(CamMove::Backward, dt);
-    if (glfwGetKey(win, GLFW_KEY_A) == GLFW_PRESS) camera.move(CamMove::Left, dt);
-    if (glfwGetKey(win, GLFW_KEY_D) == GLFW_PRESS) camera.move(CamMove::Right, dt);
+static void keyCallback(GLFWwindow* window, int key, int, int action, int) {
+    if (action != GLFW_PRESS) return;
+    switch (key) {
+        case GLFW_KEY_ESCAPE: glfwSetWindowShouldClose(window, true); break;
+        case GLFW_KEY_E: vault.interact(camera.position); break;
+        case GLFW_KEY_F: flashlight = !flashlight; break;
+        case GLFW_KEY_R:
+            vault.reset();
+            camera = Camera{};
+            flashlight = false;
+            break;
+    }
+}
+
+static void processMovement(GLFWwindow* window, float dt) {
+    const auto pressed = [window](int key) { return glfwGetKey(window, key) == GLFW_PRESS; };
+    const int forward = pressed(GLFW_KEY_W) - pressed(GLFW_KEY_S);
+    const int sideways = pressed(GLFW_KEY_D) - pressed(GLFW_KEY_A);
+    if (forward && sideways) dt *= 0.70710678f;
+    if (forward) camera.move(forward > 0 ? CamMove::Forward : CamMove::Backward, dt);
+    if (sideways) camera.move(sideways > 0 ? CamMove::Right : CamMove::Left, dt);
 }
 
 int main() {
@@ -42,21 +62,24 @@ int main() {
     GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Laser Vault Heist", nullptr, nullptr);
     if (!window) { std::cerr << "Failed to create window\n"; glfwTerminate(); return -1; }
     glfwMakeContextCurrent(window);
+    glfwSetKeyCallback(window, keyCallback);
     glfwSetFramebufferSizeCallback(window, resizeCallback);
     glfwSetCursorPosCallback(window, mouseCallback);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        std::cerr << "Failed to init GLAD\n"; return -1;
+        std::cerr << "Failed to init GLAD\n";
+        glfwTerminate();
+        return -1;
     }
     glEnable(GL_DEPTH_TEST);
 
     // Scope so that GL objects are destroyed before the context is terminated
     {
-        std::string dir = ASSET_DIR;
+        std::string dir = "./";
         Shader phong(dir + "shaders/phong.vert", dir + "shaders/phong.frag");
         Mesh cube = Mesh::createCube();
-        Mesh floorMesh = Mesh::createPlane(10.0f, 1.0f);
+
 
         float lastTime = (float)glfwGetTime();
         float fpsTimer = 0.0f; int frames = 0;
@@ -68,34 +91,37 @@ int main() {
             // FPS counter in the window title (requirement R7)
             frames++; fpsTimer += dt;
             if (fpsTimer >= 0.5f) {
-                glfwSetWindowTitle(window, ("Laser Vault Heist | FPS: " + std::to_string((int)(frames / fpsTimer))).c_str());
+                glfwSetWindowTitle(window, ("Laser Vault Heist | " + std::to_string((int)(frames / fpsTimer)) + " FPS | " +
+                    vault.status(camera.position) + " | WASD / Mouse | F: light | R: reset").c_str());
                 frames = 0; fpsTimer = 0.0f;
             }
 
-            processInput(window, dt);
+            const glm::vec3 previous = camera.position;
+            const float step = std::min(dt, 0.05f);
+            processMovement(window, step);
+            vault.update(step, previous, camera.position);
+
+            int width, height;
+            glfwGetFramebufferSize(window, &width, &height);
+            if (width == 0 || height == 0) {
+                glfwWaitEventsTimeout(0.05);
+                continue;
+            }
+            glViewport(0, 0, width, height);
 
             glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             phong.use();
-            glm::mat4 proj = glm::perspective(glm::radians(60.0f), (float)WIDTH / HEIGHT, 0.1f, 100.0f);
+            glm::mat4 proj = glm::perspective(glm::radians(60.0f), static_cast<float>(width) / height, 0.1f, 100.0f);
             phong.setMat4("projection", proj);
             phong.setMat4("view", camera.getView());
             phong.setVec3("viewPos", camera.position);
-            phong.setVec3("lightPos", glm::vec3(0.0f, 4.0f, 0.0f));
-            phong.setVec3("lightColor", glm::vec3(1.0f, 1.0f, 1.0f));
-
-            // floor
-            phong.setMat4("model", glm::mat4(1.0f));
-            phong.setVec3("objectColor", glm::vec3(0.3f, 0.3f, 0.35f));
-            floorMesh.draw();
-
-            // test cube (will become the safe later)
-            glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f));
-            m = glm::rotate(m, now, glm::vec3(0, 1, 0));
-            phong.setMat4("model", m);
-            phong.setVec3("objectColor", glm::vec3(0.8f, 0.6f, 0.1f));
-            cube.draw();
+            phong.setVec3("lampPos", glm::vec3(0, 2.8f, -3.0f));
+            phong.setVec3("movingLightPos", glm::vec3(2.5f * std::sin(now), 2.7f, -9.0f));
+            phong.setVec3("viewDirection", camera.front());
+            phong.setInt("flashlight", flashlight);
+            vault.draw(phong, cube);
 
             glfwSwapBuffers(window);
             glfwPollEvents();
