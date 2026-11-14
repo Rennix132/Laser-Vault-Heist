@@ -2,7 +2,7 @@
 
 Computer Graphics Fundamentals final project. C++17 and OpenGL 3.3 core.
 
-Cross the laser corridor, collect the gem at the vault, then return to the green exit.
+Jump over the low laser, crouch beneath the high laser and climb the raised platform. Collect the gem at the vault, then cross the obstacles again to reach the green exit.
 
 ## Build on Windows
 
@@ -20,8 +20,14 @@ cmake --build build
 | Input | Action |
 |---|---|
 | W A S D | Walk |
-| Mouse | Look |
-| E | Collect the gem near the vault or escape near the green exit |
+| Mouse | Look while captured |
+| Tab | Release or capture the mouse |
+| Left click in the game | Capture the mouse and resume play |
+| Space | Jump |
+| Ctrl (hold) | Crouch |
+| E | Climb near the platform, collect the gem or escape |
+| Enter or Continue | Close the level-two preview and return to the exit |
+| Enter or Play Again | Restart from the result menu |
 | F | Toggle the flashlight |
 | R | Restart the run |
 | Esc | Quit |
@@ -30,11 +36,10 @@ cmake --build build
 
 - Indexed cube geometry used to build the corridor, pillars, laser emitters, vault and exit.
 - Model, view and projection transforms with an animated vault door and a handle that follows its hinge.
-- Per-fragment Blinn-Phong lighting with a fixed lamp, a moving light and a toggleable flashlight.
+- Per-fragment Blinn-Phong lighting from red laser beams, cyan neon strips and a toggleable flashlight.
 - Procedural floor tiles with derivative-based smoothing.
-- Moving laser hazards, alarm and replay states, gem collection and extraction.
+- Fixed laser hazards, jumping, crouching, platform climbing, gem collection and extraction.
+- In-game loss and victory menus with a Play Again button.
 - Contextual prompts and FPS in the window title.
 
-## Team
-
-Sadykov Danial, Tuyegali Meiirzhan
+After the vault opens, the game pauses on a level-two preview. Choose Continue to resume the escape.
