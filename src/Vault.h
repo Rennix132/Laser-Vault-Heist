@@ -7,7 +7,9 @@ class Shader;
 
 class Vault {
 public:
-    void reset();
+    static constexpr int levelCount = 4;
+    void reset(int level);
+    int level = 1;
     void update(float dt, glm::vec3 previous, glm::vec3& player, bool crouch);
     void interact(glm::vec3& player);
     bool jump();

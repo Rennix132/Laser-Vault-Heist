@@ -9,7 +9,7 @@ Jump over the low laser, crouch beneath the high laser and climb the raised plat
 Use the MSYS2 UCRT64 terminal with GCC, CMake, Ninja and Git installed.
 The first configure downloads GLFW 3.3.9 and GLM 1.0.1.
 
-```sh
+```
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ./build/LaserVaultHeist.exe
@@ -26,8 +26,7 @@ cmake --build build
 | Space | Jump |
 | Ctrl (hold) | Crouch |
 | E | Climb near the platform, collect the gem or escape |
-| Enter or Continue | Close the level-two preview and return to the exit |
-| Enter or Play Again | Restart from the result menu |
+| Enter or result button | Advance after extraction or retry after an alarm |
 | F | Toggle the flashlight |
 | R | Restart the run |
 | Esc | Quit |
@@ -42,4 +41,16 @@ cmake --build build
 - In-game loss and victory menus with a Play Again button.
 - Contextual prompts and FPS in the window title.
 
-After the vault opens, the game pauses on a level-two preview. Choose Continue to resume the escape.
+
+## Levels
+
+1. Fixed low and high beams teach jumping and crouching.
+2. A vertical beam sweeps sideways, and a high beam patrols along the corridor.
+3. A faster patrol and a second moving vertical beam guard the route.
+4. A moving laser grid has a center opening above the lowest beam. Line up and jump as the grid approaches.
+
+Use the ladder and recover the gem in each level, then return to the exit. The result menu advances to the next level or retries the current one. Control hints appear in the game window.
+
+## AI Use
+
+We used AI assistance for gameplay implementation, lighting, and troubleshooting.

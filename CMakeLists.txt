@@ -25,7 +25,6 @@ add_executable(${PROJECT_NAME}
     src/Camera.cpp
     src/Vault.cpp
     src/EndMenu.cpp
-    src/GameAudio.cpp
     external/glad/src/glad.c
 )
 
@@ -36,10 +35,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw glm::glm)
-
-if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE winmm)
-endif()
 
 # MSYS2/MinGW: link runtime statically so the .exe starts without extra DLLs
 if(MINGW)

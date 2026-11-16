@@ -33,7 +33,6 @@ void Mesh::release() {
 
 Mesh::~Mesh() { release(); }
 
-// Move support is needed because the static factories return Mesh by value.
 Mesh::Mesh(Mesh&& o) noexcept : vao(o.vao), vbo(o.vbo), ebo(o.ebo), indexCount(o.indexCount) {
     o.vao = o.vbo = o.ebo = 0;
     o.indexCount = 0;
@@ -58,7 +57,6 @@ void Mesh::draw() const {
 Mesh Mesh::createCube() {
     std::vector<Vertex> v;
     std::vector<unsigned int> idx;
-    // face normal n, and two tangent axes u, w (chosen so that u x w = n -> CCW winding)
     const glm::vec3 n[6] = {{0,0,1},{0,0,-1},{1,0,0},{-1,0,0},{0,1,0},{0,-1,0}};
     const glm::vec3 u[6] = {{1,0,0},{-1,0,0},{0,0,-1},{0,0,1},{1,0,0},{1,0,0}};
     const glm::vec3 w[6] = {{0,1,0},{0,1,0},{0,1,0},{0,1,0},{0,0,-1},{0,0,1}};

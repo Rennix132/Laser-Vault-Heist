@@ -3,7 +3,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
-#include <cmath>
 #include <iostream>
 #include <string>
 
@@ -12,25 +11,18 @@
 #include "Camera.h"
 #include "Vault.h"
 #include "EndMenu.h"
-#include "GameAudio.h"
 
 static const int WIDTH = 1280, HEIGHT = 720;
 static Camera camera;
 static Vault vault;
-static float stepDistance = 0.0f;
 static bool flashlight = false;
-static bool safePreviewSeen = false;
 static float menuProgress = 0.0f;
 static float lastX = WIDTH / 2.0f, lastY = HEIGHT / 2.0f;
 static bool firstMouse = true;
 static bool cursorFree = true;
 
-static bool safePreviewActive() {
-    return !safePreviewSeen && !vault.finished() && vault.safeOpened();
-}
-
 static bool menuActive() {
-    return vault.finished() || safePreviewActive();
+    return vault.finished();
 }
 
 static void setCursorFree(GLFWwindow* window, bool free) {
@@ -48,10 +40,8 @@ static void mouseCallback(GLFWwindow*, double x, double y) {
 
 static void resizeCallback(GLFWwindow*, int w, int h) { glViewport(0, 0, w, h); }
 
-static void restart(GLFWwindow* window) {
-    vault.reset();
-    stepDistance = 0.0f;
-    safePreviewSeen = false;
+static void restart(GLFWwindow* window, int level) {
+    vault.reset(level);
     camera = Camera{};
     flashlight = false;
     menuProgress = 0.0f;
@@ -59,13 +49,9 @@ static void restart(GLFWwindow* window) {
 }
 
 static void acceptMenu(GLFWwindow* window) {
-    if (vault.finished()) {
-        restart(window);
-        return;
-    }
-    safePreviewSeen = true;
-    menuProgress = 0.0f;
-    setCursorFree(window, false);
+    int level = vault.level;
+    if (vault.won()) level = level == Vault::levelCount ? 1 : level + 1;
+    restart(window, level);
 }
 
 static void keyCallback(GLFWwindow* window, int key, int, int action, int) {
@@ -75,14 +61,11 @@ static void keyCallback(GLFWwindow* window, int key, int, int action, int) {
         setCursorFree(window, !cursorFree);
         return;
     }
-    if (key == GLFW_KEY_R) restart(window);
+    if (key == GLFW_KEY_R) restart(window, vault.level);
     if (key == GLFW_KEY_ENTER && menuActive()) acceptMenu(window);
     if (cursorFree || menuActive()) return;
     if (key == GLFW_KEY_E) vault.interact(camera.position);
-    if (key == GLFW_KEY_SPACE && vault.jump()) {
-        static_cast<GameAudio*>(glfwGetWindowUserPointer(window))->jump();
-        stepDistance = 0.0f;
-    }
+    if (key == GLFW_KEY_SPACE) vault.jump();
     if (key == GLFW_KEY_F) flashlight = !flashlight;
 }
 
@@ -134,13 +117,10 @@ int main() {
     }
     glEnable(GL_DEPTH_TEST);
 
-    // Scope so that GL objects are destroyed before the context is terminated
     {
         std::string dir = "./";
         Shader phong(dir + "shaders/phong.vert", dir + "shaders/phong.frag");
         Mesh cube = Mesh::createCube();
-        GameAudio audio;
-        glfwSetWindowUserPointer(window, &audio);
 
 
         float lastTime = (float)glfwGetTime();
@@ -150,7 +130,6 @@ int main() {
             float now = (float)glfwGetTime();
             float dt = now - lastTime; lastTime = now;
 
-            // FPS counter in the window title (requirement R7)
             frames++; fpsTimer += dt;
             if (fpsTimer >= 0.5f) {
                 glfwSetWindowTitle(window, ("Laser Vault Heist | " + std::to_string((int)(frames / fpsTimer)) + " FPS | " +
@@ -166,22 +145,12 @@ int main() {
                                     glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
                 processMovement(window, crouch ? step * 0.65f : step);
                 vault.update(step, previous, camera.position, crouch);
-                if (vault.onGround() && !menuActive()) {
-                    const glm::vec3 change = camera.position - previous;
-                    stepDistance += std::hypot(change.x, change.z);
-                    const float stride = crouch ? 0.72f : 1.12f;
-                    if (stepDistance >= stride) {
-                        audio.footstep(crouch);
-                        stepDistance = 0.0f;
-                    }
-                }
             }
             if (menuActive()) {
                 if (!cursorFree) setCursorFree(window, true);
                 menuProgress = std::min(1.0f, menuProgress + step * 5.0f);
             }
 
-            audio.update();
 
             int width, height;
             glfwGetFramebufferSize(window, &width, &height);
@@ -204,9 +173,12 @@ int main() {
             vault.draw(phong, cube);
 
             if (menuActive()) {
-                const auto screen = safePreviewActive() ? MenuScreen::SafeOpened
-                                  : vault.won() ? MenuScreen::Victory : MenuScreen::Alarm;
+                const auto screen = !vault.won() ? MenuScreen::Alarm
+                                  : vault.level < Vault::levelCount ? MenuScreen::NextLevel
+                                  : MenuScreen::Victory;
                 drawEndMenu(window, width, height, screen, menuProgress);
+            } else {
+                drawControls(width, height, vault.level, cursorFree, vault.status(camera.position));
             }
             glfwSwapBuffers(window);
             glfwPollEvents();

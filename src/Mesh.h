@@ -19,8 +19,8 @@ public:
 
     void draw() const;
 
-    static Mesh createCube();                                 // unit cube centered at origin
-    static Mesh createPlane(float halfSize, float uvTiling);  // XZ plane, normal up
+    static Mesh createCube();                                
+    static Mesh createPlane(float halfSize, float uvTiling); 
 
 private:
     unsigned int vao = 0, vbo = 0, ebo = 0;

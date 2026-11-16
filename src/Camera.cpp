@@ -10,7 +10,6 @@ glm::mat4 Camera::getView() const {
 }
 
 void Camera::move(CamMove dir, float dt) {
-    // walk on the XZ plane so looking up/down does not lift the player
     glm::vec3 flat = glm::normalize(glm::vec3(frontVec.x, 0.0f, frontVec.z));
     glm::vec3 right = glm::normalize(glm::cross(flat, glm::vec3(0, 1, 0)));
     float v = speed * dt;

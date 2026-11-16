@@ -3,6 +3,8 @@
 #include "Shader.h"
 
 #include <algorithm>
+#include <array>
+#include <string>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -27,6 +29,52 @@ const glm::vec3 safePosition(0.0f, 0.0f, -10.65f);
 const glm::vec3 exitPosition(0.0f, 0.0f, 6.15f);
 const glm::mat4 identity(1.0f);
 
+struct Laser { glm::vec3 center, size; };
+constexpr int gridLevel = 4;
+constexpr int maxLasers = 8;
+constexpr float gridGapHalfWidth = 1.05f;
+
+int laserCountFor(int level) {
+    return level == gridLevel ? maxLasers : level + 1;
+}
+
+float gridPosition(float time) {
+    constexpr float nearEnd = 4.4f;
+    constexpr float farEnd = -3.0f;
+    constexpr float length = nearEnd - farEnd;
+    const float travel = std::fmod(time * 3.0f, 2.0f * length);
+    return farEnd + length - std::abs(travel - length);
+}
+
+std::array<Laser, maxLasers> lasersFor(int level, float time) {
+    if (level == gridLevel) {
+        const float z = gridPosition(time);
+        const float wingWidth = halfWidth - gridGapHalfWidth;
+        const float wingCenter = gridGapHalfWidth + wingWidth / 2;
+        return {{
+            {{0, 0.50f, z}, {8, beamThickness, beamThickness}},
+            {{0, 2.80f, z}, {8, beamThickness, beamThickness}},
+            {{-gridGapHalfWidth, 1.7f, z}, {beamThickness, 3.4f, beamThickness}},
+            {{ gridGapHalfWidth, 1.7f, z}, {beamThickness, 3.4f, beamThickness}},
+            {{-wingCenter, 0.95f, z}, {wingWidth, beamThickness, beamThickness}},
+            {{ wingCenter, 0.95f, z}, {wingWidth, beamThickness, beamThickness}},
+            {{-wingCenter, 1.65f, z}, {wingWidth, beamThickness, beamThickness}},
+            {{ wingCenter, 1.65f, z}, {wingWidth, beamThickness, beamThickness}}
+        }};
+    }
+    const float patrol = std::sin(time * (level == 3 ? 1.55f : 1.05f));
+    const float sweep = std::sin(time * 1.7f);
+    const Laser low{{0, jumpBeamY, jumpBeamZ}, {8, beamThickness, beamThickness}};
+    const Laser high{{0, crouchBeamY, crouchBeamZ}, {8, beamThickness, beamThickness}};
+    const Laser vertical{{2.65f * sweep, 1.7f, 0.55f}, {beamThickness, 3.4f, beamThickness}};
+    const Laser moving{{0, crouchBeamY, -1.85f + 0.85f * patrol}, {8, beamThickness, beamThickness}};
+    const Laser movingColumn{{-1.65f + 0.65f * sweep, 1.7f, -7.75f + 1.05f * patrol},
+                             {beamThickness, 3.4f, beamThickness}};
+    if (level == 1) return {low, high, {}, {}};
+    if (level == 2) return {low, vertical, moving, {}};
+    return {low, vertical, moving, movingColumn};
+}
+
 bool nearLadder(const glm::vec3& player) {
     const float edgeDistance = std::abs(player.z - climbZ) - climbHalfDepth;
     return std::abs(player.x - ladderX) <= ladderWidth / 2 &&
@@ -39,8 +87,9 @@ bool near(glm::vec3 player, const glm::vec3& point, float radius) {
 }
 }
 
-void Vault::reset() {
+void Vault::reset(int nextLevel) {
     *this = Vault{};
+    level = nextLevel;
 }
 
 bool Vault::jump() {
@@ -69,13 +118,25 @@ void Vault::update(float dt, glm::vec3 previous, glm::vec3& player, bool crouch)
     const float eyeHeight = crouch ? 0.90f : 1.70f;
     player.y = feet + eyeHeight;
 
-    const auto touchesBeam = [&](float z, float height) {
-        return std::abs(player.z - z) <= playerRadius + beamThickness / 2 &&
-               std::min(feet, oldFeet) <= height + beamThickness / 2 &&
-               std::max(feet, oldFeet) + eyeHeight + 0.12f >= height - beamThickness / 2;
-    };
-    caught = touchesBeam(jumpBeamZ, jumpBeamY) || touchesBeam(crouchBeamZ, crouchBeamY);
+    const auto previousLasers = lasersFor(level, elapsed);
     elapsed += dt;
+    const auto currentLasers = lasersFor(level, elapsed);
+    for (int i = 0; i < laserCountFor(level); ++i) {
+        const auto& laser = currentLasers[i];
+        const auto half = laser.size * 0.5f;
+        const glm::vec3 oldOffset = previous - previousLasers[i].center;
+        const glm::vec3 newOffset = player - laser.center;
+        const auto nearAxis = [](float a, float b, float limit) {
+            return std::min(a, b) <= limit && std::max(a, b) >= -limit;
+        };
+        if (nearAxis(oldOffset.x, newOffset.x, half.x + playerRadius) &&
+            nearAxis(oldOffset.z, newOffset.z, half.z + playerRadius) &&
+            std::min(feet - laser.center.y, oldFeet - previousLasers[i].center.y) <= half.y &&
+            std::max(feet - laser.center.y, oldFeet - previousLasers[i].center.y) + eyeHeight + 0.12f >= -half.y) {
+            caught = true;
+            break;
+        }
+    }
     if (hasGem) doorAngle = std::min(openDoorAngle, doorAngle + dt * 2.5f);
 }
 
@@ -97,16 +158,26 @@ const char* Vault::status(const glm::vec3& player) const {
     if (hasGem && near(player, exitPosition, 1.15f)) return "E: escape";
     if (!hasGem && near(player, safePosition, 1.9f)) return "E: take the gem";
     if (grounded && feet == 0.0f && nearLadder(player)) return "E: climb the ladder";
+    if (level == gridLevel) return std::abs(player.x) > 0.75f
+        ? "A OR D: LINE UP WITH THE CENTER GAP" : "SPACE: JUMP AS THE GRID GETS CLOSE";
     if (std::abs(player.z - jumpBeamZ) < 1.6f) return "SPACE: jump over the low beam";
-    if (std::abs(player.z - crouchBeamZ) < 1.6f) return "CTRL: crouch under the high beam";
+    if (level == 1 && std::abs(player.z - crouchBeamZ) < 1.6f) return "CTRL: crouch under the high beam";
+    if (level > 1 && std::abs(player.z + 1.85f) < 1.7f) return "CTRL: stay low under the moving laser";
+    if (level > 1 && (std::abs(player.z - 0.55f) < 1.05f ||
+                      (level == 3 && std::abs(player.z + 7.75f) < 1.35f)))
+        return "A or D: dodge the vertical laser";
     return hasGem ? "Return to the green exit" : "Reach the vault and take the gem";
 }
 
 void Vault::draw(const Shader& shader, const Mesh& cube) const {
-    shader.setVec3("jumpLaser", {0, jumpBeamY, jumpBeamZ});
-    shader.setVec3("crouchLaser", {0, crouchBeamY, crouchBeamZ});
+    const auto lasers = lasersFor(level, elapsed);
+    shader.setInt("laserCount", laserCountFor(level));
+    for (int i = 0; i < laserCountFor(level); ++i) {
+        const std::string index = "[" + std::to_string(i) + "]";
+        shader.setVec3("laserCenters" + index, lasers[i].center);
+        shader.setVec3("laserExtents" + index, lasers[i].size * 0.5f);
+    }
     shader.setVec3("neonStrip", {neonX, neonY, 0});
-    shader.setFloat("laserHalfWidth", halfWidth);
     shader.setFloat("neonNearZ", front - 0.35f);
     shader.setFloat("neonFarZ", back + 0.35f);
 
@@ -141,10 +212,13 @@ void Vault::draw(const Shader& shader, const Mesh& cube) const {
     box({0, 1.05f, 6.88f}, {1.65f, 2.1f, 0.12f}, metal);
     box({0, 2.3f, 6.78f}, {1.65f, 0.12f, 0.12f}, green, 0.9f);
 
-    for (const glm::vec2 beam : {glm::vec2(jumpBeamZ, jumpBeamY), glm::vec2(crouchBeamZ, crouchBeamY)}) {
-        box({0, beam.y, beam.x}, {8.0f, beamThickness, beamThickness}, glm::vec3(1.0f, 0.22f, 0.31f), 1.0f);
+    for (int i = 0; i < laserCountFor(level); ++i) {
+        const auto& laser = lasers[i];
+        box(laser.center, laser.size, {1.0f, 0.22f, 0.31f}, 1.0f);
+        const glm::vec3 axis = laser.size.x > laser.size.y
+                             ? glm::vec3(laser.size.x / 2 - 0.15f, 0, 0) : glm::vec3(0, 1.58f, 0);
         for (float side : {-1.0f, 1.0f}) {
-            box({side * 3.85f, beam.y, beam.x}, {0.22f, 0.23f, 0.23f}, red, 0.65f);
+            box(laser.center + side * axis, {0.22f, 0.23f, 0.23f}, red, 0.65f);
         }
     }
     box({0, climbHeight / 2, climbZ}, {8, climbHeight, climbHalfDepth * 2}, metal);
